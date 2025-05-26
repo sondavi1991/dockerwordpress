@@ -1,14 +1,23 @@
-# Dockerfile para WordPress com PHP 8.2, Nginx, MariaDB, OPcache, Redis
+# Dockerfile para WordPress com PHP 8.2, Nginx, OPcache, Redis
 # Otimizado para ambiente de produção e uso no Coolify
 
-# Estágio de construção para PHP e Nginx
-FROM php:8.2-fpm-alpine AS php-base
+# Imagem base PHP 8.2 com FPM
+FROM php:8.2-fpm-alpine
 
-# Instalação de dependências e extensões PHP
-RUN apk add --no-cache \
+# Instalação de dependências essenciais
+RUN apk update && apk upgrade && \
+    apk add --no-cache \
     nginx \
-    mariadb mariadb-client \
-    redis \
+    supervisor \
+    bash \
+    nano \
+    git \
+    zip \
+    unzip \
+    curl
+
+# Instalação de dependências para extensões PHP
+RUN apk add --no-cache \
     libpng-dev \
     libjpeg-turbo-dev \
     freetype-dev \
@@ -16,17 +25,17 @@ RUN apk add --no-cache \
     icu-dev \
     oniguruma-dev \
     libxml2-dev \
-    curl-dev \
-    libmemcached-dev \
-    openssl-dev \
-    supervisor \
-    bash \
-    nano \
-    git \
-    zip \
-    unzip \
-    && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install -j$(nproc) \
+    linux-headers
+
+# Instalação do MariaDB client (sem o servidor)
+RUN apk add --no-cache mariadb-client
+
+# Instalação do Redis client (sem o servidor)
+RUN apk add --no-cache redis
+
+# Configuração e instalação das extensões PHP
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg && \
+    docker-php-ext-install -j$(nproc) \
     gd \
     mysqli \
     pdo \
@@ -39,12 +48,11 @@ RUN apk add --no-cache \
     exif \
     bcmath \
     soap \
-    calendar \
     sockets
 
-# Instalação do Redis para PHP
-RUN pecl install redis \
-    && docker-php-ext-enable redis
+# Instalação da extensão Redis para PHP
+RUN pecl install redis && \
+    docker-php-ext-enable redis
 
 # Configuração do OPcache para ambiente de produção
 RUN { \
@@ -83,18 +91,9 @@ RUN curl -O https://wordpress.org/latest.tar.gz \
     && chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html
 
-# Configuração do MariaDB
-RUN mkdir -p /run/mysqld \
-    && chown -R mysql:mysql /run/mysqld \
-    && mkdir -p /var/lib/mysql \
-    && chown -R mysql:mysql /var/lib/mysql
-
 # Configuração do Supervisor
+RUN mkdir -p /etc/supervisor/conf.d
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-
-# Configuração do Redis
-RUN mkdir -p /var/lib/redis \
-    && chown -R redis:redis /var/lib/redis
 
 # Script de inicialização
 COPY entrypoint.sh /entrypoint.sh
